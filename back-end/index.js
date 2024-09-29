@@ -196,12 +196,13 @@ const pollyClient = new PollyClient({
 });
 
 async function handleEndInterview(socket) {
-  const response = await sendMessage("\
-    Now that the interview is over, I want you to generate a report of the interview.\
+  const response = await sendMessage("Now that the interview is over, I want you to generate a report of the interview.\
     Mention how the candidate did in the interview, their strengths, weaknesses, overall score out of 100.\
     Also tell what areas the candidate needs to focus on. The report needs to be generated solely based on \
     the candidate's interview performance. If the interview ends early without much information from \
-    the candidate, score them appropriately, don't generalize");
+    the candidate, score them appropriately, don't generalize. If you don't have any information, don't \
+    put it in the report. Do not use any placeholders, if there is no information for the report, just mention that.\
+    Also, do not score or provide strengths and weaknesses if there is no information or interview concluded prematurely.");
   socket.emit("end-response", response);
   console.log("response", response)
 }
@@ -237,7 +238,7 @@ io.on("connection", (socket) => {
     console.log("resume and job description received");
     chat_history.push(
       {
-        role: "system", content: `Your name is PrepBot. You are now an interviewer with more than 10 years of experience. \
+        role: "system", content: `Your name is ${selectedInterviewer}. You are now an interviewer with more than 10 years of experience. \
           You are taking an interview for the given job description. You have the resume of the candidate. You will be making \
           it a formal interview. You need to introduce yourself, ask for an introduction, and the proceed to asking two questions \
           based on the candidates experience and skills, two technical questions (no coding) based on the job description and two \

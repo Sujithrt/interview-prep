@@ -160,8 +160,8 @@ export default function Home() {
           <Box width="100%" mt={3}>
             {loading ? (
               <Box display="flex" justifyContent="center" alignItems="center" height="100%">
-              <CircularProgress />
-            </Box>
+                <CircularProgress />
+              </Box>
             ) : (
               !isSetup ? (
                 <>
@@ -228,7 +228,6 @@ export default function Home() {
                     </IconButton>
                     <Button
                       variant="contained"
-                      // color="secondary"
                       onClick={handleEndInterview}
                       style={{ marginTop: '3rem' }} // Align the button to the right
                     >
