@@ -56,6 +56,7 @@ export default function Home() {
       if (audioArrayBuffer) {
         const audioBlob = new Blob([audioArrayBuffer], { type: 'audio/mp3' });
         const url = URL.createObjectURL(audioBlob);
+        console.log("This is URL", url);
         setAudioUrl(url);
       }
     });
@@ -65,7 +66,7 @@ export default function Home() {
         socketRef.current.disconnect();
       }
     };
-  }, []);
+  }, [audioUrl]);
 
   const handleStartRecording = () => {
     setIsRecording(true);
@@ -187,7 +188,7 @@ export default function Home() {
                 variant="contained"
                 color="secondary"
                 // onClick={handleEndInterview}
-                style={{ marginTop: '1rem', alignSelf: 'flex-end' }} // Align the button to the right
+                style={{ marginTop: '1rem' }} // Align the button to the right
               >
                 End Interview
               </Button>
@@ -202,7 +203,7 @@ export default function Home() {
         onClose={() => setSnackbarOpen(false)}
         message={statusMessage}
       />
-      {audioUrl !== null && <audio autoPlay>
+      {audioUrl !== null && <audio key={audioUrl} autoPlay>
         <source src={audioUrl} type="audio/mp3" />
       </audio>}
     </Container>
