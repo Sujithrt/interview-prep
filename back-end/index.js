@@ -8,6 +8,7 @@ import ffmpegPath from '@ffmpeg-installer/ffmpeg';
 import ffmpeg from 'fluent-ffmpeg';
 import { TranscribeClient, StartTranscriptionJobCommand, GetTranscriptionJobCommand } from '@aws-sdk/client-transcribe';
 import { S3Client, PutObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
+import { v4 as uuidv4 } from 'uuid';  // Import UUID for unique filenames
 
 env.config();
 ffmpeg.setFfmpegPath(ffmpegPath.path);
@@ -28,56 +29,64 @@ const io = new Server(server, {
 });
 
 async function transcriptionPipeline(audioData) {
-    // Convert audio data to wav
-    const AUDIO_FILE_NAME = 'audio.wav';
-    const AUDIO_MIDDLE_NAME = 'audio.webm';
+    const uniqueId = uuidv4();  // Generate unique ID for each file/job
+    const AUDIO_FILE_NAME = `audio-${uniqueId}.wav`;  // Unique WAV file name
+    const AUDIO_MIDDLE_NAME = `audio-${uniqueId}.webm`;  // Unique WebM file name
+
+    // Write audio data to WebM file
     fs.writeFileSync(AUDIO_MIDDLE_NAME, Buffer.from(audioData));
     const stats = fs.statSync(AUDIO_MIDDLE_NAME);
     if (stats.size === 0) {
-      console.err("Empty audio file");
+      console.error("Empty audio file");
       return;
     }
+
+    // Convert WebM to WAV using ffmpeg and wait for conversion to finish
     try {
-      ffmpeg(AUDIO_MIDDLE_NAME)
-        .inputOptions("-acodec libopus")
-        .audioChannels(1)
-        .audioFrequency(44100)
-        .toFormat("wav")
-        .on("end", () => {
-          console.log("File converted to wav");
-        })
-        .on("error", (err) => {
-          console.log("Error converting file to wav", err);
-        })
-        .save(AUDIO_FILE_NAME);
+      await new Promise((resolve, reject) => {
+        ffmpeg(AUDIO_MIDDLE_NAME)
+          .inputOptions("-acodec libopus")
+          .audioChannels(1)
+          .audioFrequency(44100)
+          .toFormat("wav")
+          .on("end", () => {
+            console.log("File converted to wav");
+            resolve();
+          })
+          .on("error", (err) => {
+            console.log("Error converting file to wav", err);
+            reject(err);
+          })
+          .save(AUDIO_FILE_NAME);
+      });
     } catch (err) {
       console.log(err);
     }
 
-    // Upload Audio to S3.
-    const fileData = fs.readFileSync(AUDIO_FILE_NAME);
-    const putCommand = new PutObjectCommand({
-      Bucket: "sunhacks",
-      Key: AUDIO_FILE_NAME,
-      Body: fileData
-    });
+    // Upload WAV file to S3 with a unique filename
     try {
+      const fileData = fs.readFileSync(AUDIO_FILE_NAME);
+      const putCommand = new PutObjectCommand({
+        Bucket: "sunhacksbucket1",
+        Key: AUDIO_FILE_NAME,  // Use the unique filename
+        Body: fileData
+      });
       await s3Client.send(putCommand);
       console.log("Successfully uploaded data to S3");
     } catch (err) {
-      console.log(err);
+      console.log("Error uploading to S3:", err);
     }
 
-    // Send audio to AWS Transcribe
-    const jobName = 'SunHacksTranscriptionJob' + new Date().getTime();
+    // Send audio to AWS Transcribe using a unique job name
+    const jobName = `SunHacksTranscriptionJob-${uniqueId}`;  // Unique job name
     const params = {
       TranscriptionJobName: jobName,
       LanguageCode: 'en-US',
       MediaFormat: 'wav',
       Media: {
-        MediaFileUri: 'https://sunhacks.s3.amazonaws.com/' + AUDIO_FILE_NAME,
+        MediaFileUri: `https://sunhacksbucket1.s3.amazonaws.com/${AUDIO_FILE_NAME}`,  // Correct bucket and unique filename
       },
-      OutputBucketName: "sunhacks",
+      OutputBucketName: "sunhacksbucket1",
     };
     try {
       await transcribeClient.send(new StartTranscriptionJobCommand(params));
@@ -102,10 +111,10 @@ async function transcriptionPipeline(audioData) {
       }
     }
 
-    // Get transcription from AWS S3.
+    // Get transcription from AWS S3 using a unique key
     const getCommand = new GetObjectCommand({
-      Bucket: "sunhacks",
-      Key: jobName + ".json"
+      Bucket: "sunhacksbucket1",
+      Key: `${jobName}.json`  // Unique transcription result key
     });
     try {
       const response = await s3Client.send(getCommand);
@@ -137,7 +146,6 @@ io.on('connection', (socket) => {
 
   socket.on('start', () => {
     console.log('Start recording');
-    // Initialize AWS Transcribe streaming here if needed
   });
 
   socket.on('audio', (audioData) => {
