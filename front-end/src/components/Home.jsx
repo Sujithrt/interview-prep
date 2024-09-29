@@ -37,10 +37,15 @@ const Home = () => {
         
         mediaRecorderRef.current.onstop = () => {
           const audioBlob = new Blob(audioChunks.current, { type: 'audio/wav' });
+          const audioUrl = URL.createObjectURL(audioBlob);
+          const anchor = document.createElement('a');
+          anchor.href = audioUrl;
+          anchor.download = 'audio.wav';
+          anchor.click();
           audioChunks.current = [];
 
           // Convert the audio blob to an ArrayBuffer and send it to the backend
-          const reader = new FileReader();
+          const reader = new FileReader();  
           reader.readAsArrayBuffer(audioBlob);
           reader.onloadend = () => {
             const audioData = reader.result;
