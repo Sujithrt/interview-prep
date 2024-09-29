@@ -17,6 +17,7 @@ import {
   GetObjectCommand,
 } from "@aws-sdk/client-s3";
 import { v4 as uuidv4 } from "uuid";
+import OpenAIApi from "openai";
 
 env.config();
 ffmpeg.setFfmpegPath(ffmpegPath.path);
@@ -71,37 +72,37 @@ async function transcriptionPipeline(audioData) {
     console.log(err);
   }
 
-    // Upload WAV file to S3 with a unique filename
-    try {
-      const fileData = fs.readFileSync(AUDIO_FILE_NAME);
-      const putCommand = new PutObjectCommand({
-        Bucket: process.env.BUCKET_NAME,
-        Key: AUDIO_FILE_NAME,  // Use the unique filename
-        Body: fileData
-      });
-      await s3Client.send(putCommand);
-      console.log("Successfully uploaded data to S3");
-    } catch (err) {
-      console.log("Error uploading to S3:", err);
-    }
+  // Upload WAV file to S3 with a unique filename
+  try {
+    const fileData = fs.readFileSync(AUDIO_FILE_NAME);
+    const putCommand = new PutObjectCommand({
+      Bucket: process.env.BUCKET_NAME,
+      Key: AUDIO_FILE_NAME,  // Use the unique filename
+      Body: fileData
+    });
+    await s3Client.send(putCommand);
+    console.log("Successfully uploaded data to S3");
+  } catch (err) {
+    console.log("Error uploading to S3:", err);
+  }
 
-    // Send audio to AWS Transcribe using a unique job name
-    const jobName = `SunHacksTranscriptionJob-${uniqueId}`;  // Unique job name
-    const params = {
-      TranscriptionJobName: jobName,
-      LanguageCode: 'en-US',
-      MediaFormat: 'wav',
-      Media: {
-        MediaFileUri: `https://${process.env.BUCKET_NAME}.s3.amazonaws.com/${AUDIO_FILE_NAME}`,  // Correct bucket and unique filename
-      },
-      OutputBucketName: process.env.BUCKET_NAME,
-    };
-    try {
-      await transcribeClient.send(new StartTranscriptionJobCommand(params));
-      console.log("Successfully sent transcription job to AWS Transcribe");
-    } catch (err) {
-      console.log("Error", err);
-    }
+  // Send audio to AWS Transcribe using a unique job name
+  const jobName = `SunHacksTranscriptionJob-${uniqueId}`;  // Unique job name
+  const params = {
+    TranscriptionJobName: jobName,
+    LanguageCode: 'en-US',
+    MediaFormat: 'wav',
+    Media: {
+      MediaFileUri: `https://${process.env.BUCKET_NAME}.s3.amazonaws.com/${AUDIO_FILE_NAME}`,  // Correct bucket and unique filename
+    },
+    OutputBucketName: process.env.BUCKET_NAME,
+  };
+  try {
+    await transcribeClient.send(new StartTranscriptionJobCommand(params));
+    console.log("Successfully sent transcription job to AWS Transcribe");
+  } catch (err) {
+    console.log("Error", err);
+  }
 
   // Poll AWS Transcribe for job completion
   const getJobCommand = new GetTranscriptionJobCommand({
@@ -119,18 +120,84 @@ async function transcriptionPipeline(audioData) {
     }
   }
 
-    // Get transcription from AWS S3 using a unique key
-    const getCommand = new GetObjectCommand({
-      Bucket: process.env.BUCKET_NAME,
-      Key: `${jobName}.json`  // Unique transcription result key
-    });
+  let data;
+
+  // Get transcription from AWS S3 using a unique key
+  const getCommand = new GetObjectCommand({
+    Bucket: process.env.BUCKET_NAME,
+    Key: `${jobName}.json`  // Unique transcription result key
+  });
+  try {
+    const response = await s3Client.send(getCommand);
+    data = JSON.parse(await response.Body.transformToString());
+    console.log(data["results"]["transcripts"][0]["transcript"]);
+  } catch (err) {
+    console.error(err);
+  }
+  const openai = new OpenAIApi({
+    apiKey: process.env.OPENAI_API_KEY,
+  });
+
+  let messages = [
+    { role: "system", content: "Your name is Matthew. You are now an interviewer with more than 10 years of experience. \
+      You are taking an interview for the given job description. You have the resume of the candidate. You will be making \
+      it a formal interview. You need to introduce yourself, ask for an introduction, and the proceed to asking two questions \
+      based on the candidates experience and skills, two technical questions (no coding) based on the job description and two \
+      behavioural questions for checking soft skills of the candidate. Here is the job description and the resume of the candidate. \
+      You are taking an interactive interview, so wait for the candidate's response. Once the candidate responds, make some comment \
+      about the response and proceed to the next question. Do not put any headings, titles, or expectations in round brackets. Do not \
+      say you're waiting for my response. It just needs to be a simple conversation." },
+  ]
+
+  async function sendMessage(message) {
     try {
-      const response = await s3Client.send(getCommand);
-      const data = JSON.parse(await response.Body.transformToString());
-      console.log(data["results"]["transcripts"][0]["transcript"]);
+      messages = messages.concat({ role: "user", content: message })
+      const response = await openai.chat.completions.create({
+        model: "gpt-4o",
+        messages,
+      });
+      messages = messages.concat({ role: "system", content: response.choices[0].message.content })
+      return response.choices[0].message.content;
     } catch (err) {
-      console.error(err);
+      console.error('Error with OpenAI:', err);
+      return 'An error occurred while processing your request.';
     }
+  }
+
+  sendMessage(data["results"]["transcripts"][0]["transcript"]).then((response) => {
+    console.log(response);
+    // const client = new Polly({
+    //   region: "REGION",
+    // });
+
+    // const speechParams = {
+    //   OutputFormat: "OUTPUT_FORMAT", // For example, 'mp3'
+    //   SampleRate: "SAMPLE_RATE", // For example, '16000
+    //   Text: response, // The 'speakText' function supplies this value
+    //   TextType: "TEXT_TYPE", // For example, "text"
+    //   VoiceId: "POLLY_VOICE", // For example, "Matthew"
+    // };
+
+    // const speakText = async () => {
+    //   // Update the Text parameter with the text entered by the user
+    //   try {
+    //     let url = await getSynthesizeSpeechUrl({
+    //       client,
+    //       params: speechParams,
+    //     });
+    //     console.log(url);
+    //     // // Load the URL of the voice recording into the browser
+    //     // document.getElementById("audioSource").src = url;
+    //     // document.getElementById("audioPlayback").load();
+    //     // document.getElementById("result").innerHTML = "Speech ready to play.";
+    //   } catch (err) {
+    //     console.log("Error", err);
+    //   }
+    // };
+    // speakText();
+
+  });
+
 }
 
 // Set up AWS Transcribe
