@@ -67,7 +67,7 @@ async function transcriptionPipeline(audioData) {
     try {
       const fileData = fs.readFileSync(AUDIO_FILE_NAME);
       const putCommand = new PutObjectCommand({
-        Bucket: "sunhacksbucket1",
+        Bucket: process.env.BUCKET_NAME,
         Key: AUDIO_FILE_NAME,  // Use the unique filename
         Body: fileData
       });
@@ -84,9 +84,9 @@ async function transcriptionPipeline(audioData) {
       LanguageCode: 'en-US',
       MediaFormat: 'wav',
       Media: {
-        MediaFileUri: `https://sunhacksbucket1.s3.amazonaws.com/${AUDIO_FILE_NAME}`,  // Correct bucket and unique filename
+        MediaFileUri: `https://${process.env.BUCKET_NAME}.s3.amazonaws.com/${AUDIO_FILE_NAME}`,  // Correct bucket and unique filename
       },
-      OutputBucketName: "sunhacksbucket1",
+      OutputBucketName: process.env.BUCKET_NAME,
     };
     try {
       await transcribeClient.send(new StartTranscriptionJobCommand(params));
@@ -113,7 +113,7 @@ async function transcriptionPipeline(audioData) {
 
     // Get transcription from AWS S3 using a unique key
     const getCommand = new GetObjectCommand({
-      Bucket: "sunhacksbucket1",
+      Bucket: process.env.BUCKET_NAME,
       Key: `${jobName}.json`  // Unique transcription result key
     });
     try {
