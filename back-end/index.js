@@ -167,70 +167,8 @@ async function transcriptionPipeline(audioData, socket) {
         // Send the audio data to the frontend via WebSocket
         socket.emit("audio-response", audioArrayBuffer);
       });
-      // AudioStream.pipe(fs.createWriteStream("audio_polly.mp3"));
-      // const arrayBuffer = new Uint8Array(AudioStream).buffer;
-      // const POLLY_WEBM = `audio_polly.webm`;
-      // const POLLY_WAV = `audio_polly.wav`;
-      // // Write audio data to WebM file
-      // fs.writeFileSync(POLLY_WEBM, Buffer.from(arrayBuffer));
-      // const stats = fs.statSync(POLLY_WEBM);
-      // if (stats.size === 0) {
-      //   console.error("Empty audio file");
-      //   return;
-      // }
-
-      // // Convert WebM to WAV using ffmpeg and wait for conversion to finish
-      // try {
-      //   await new Promise((resolve, reject) => {
-      //     ffmpeg(POLLY_WEBM)
-      //       .inputOptions("-acodec libopus")
-      //       .audioChannels(1)
-      //       .audioFrequency(44100)
-      //       .toFormat("wav")
-      //       .on("end", () => {
-      //         console.log("File converted to wav");
-      //         resolve();
-      //       })
-      //       .on("error", (err) => {
-      //         console.log("Error converting file to wav", err);
-      //         reject(err);
-      //       })
-      //       .save(POLLY_WAV);
-      //   });
-      // } catch (err) {
-      //   console.log(err);
-      // }
     }
     run();
-    // const client = new Polly({
-    //   region: "REGION",
-    // });
-
-    // const speechParams = {
-    //   OutputFormat: "OUTPUT_FORMAT", // For example, 'mp3'
-    //   SampleRate: "SAMPLE_RATE", // For example, '16000
-    //   Text: response, // The 'speakText' function supplies this value
-    //   TextType: "TEXT_TYPE", // For example, "text"
-    //   VoiceId: "POLLY_VOICE", // For example, "Matthew"
-    // };
-
-    // const speakText = async () => {
-    //   // Update the Text parameter with the text entered by the user
-    //   try {
-    //     let url = await getSynthesizeSpeechUrl({
-    //       client,
-    //       params: speechParams,
-    //     });
-    //     console.log(url);
-    //     // // Load the URL of the voice recording into the browser
-    //     // document.getElementById("audioSource").src = url;
-    //     // document.getElementById("audioPlayback").load();
-    //     // document.getElementById("result").innerHTML = "Speech ready to play.";
-    //   } catch (err) {
-    //     console.log("Error", err);
-    //   }
-    // };
-    // speakText();
   });
 }
 
@@ -282,21 +220,9 @@ io.on("connection", (socket) => {
   //resume and job description upload
   socket.on("submit", async ({ resume, jobDescription }) => {
     console.log("resume and job description received");
-    try {
-      // Save resume to S3
-      const resumeBuffer = Buffer.from(new Uint8Array(resume)); // Convert ArrayBuffer to Buffer
-      // TODO: upload to S3
-      //   const resumeUrl = await uploadToS3(
-      //     resumeBuffer,
-      //     `resumes/${Date.now()}.pdf`
-      //   );
-      resume = "This is my resume, I know stuff"
-      // Process job description (e.g., log it for now)
-      console.log("Job Description:", jobDescription);
-
-      chat_history.push(
-        {
-          role: "system", content: `Your name is Matthew. You are now an interviewer with more than 10 years of experience. \
+    chat_history.push(
+      {
+        role: "system", content: `Your name is PrepBot. You are now an interviewer with more than 10 years of experience. \
           You are taking an interview for the given job description. You have the resume of the candidate. You will be making \
           it a formal interview. You need to introduce yourself, ask for an introduction, and the proceed to asking two questions \
           based on the candidates experience and skills, two technical questions (no coding) based on the job description and two \
@@ -305,51 +231,38 @@ io.on("connection", (socket) => {
           about the response and proceed to the next question. Do not put any headings, titles, or expectations in round brackets. Do not \
           say you're waiting for my response. It just needs to be a simple conversation.\nJob Description: \n${jobDescription}\nResume: \n\
           ${resume}`
-        },
-      )
+      },
+    )
 
-      sendMessage().then((response) => {
-        console.log(response);
-        // const client = new Polly({
-        //   region: "REGION",
-        // });
-
-        // const speechParams = {
-        //   OutputFormat: "OUTPUT_FORMAT", // For example, 'mp3'
-        //   SampleRate: "SAMPLE_RATE", // For example, '16000
-        //   Text: response, // The 'speakText' function supplies this value
-        //   TextType: "TEXT_TYPE", // For example, "text"
-        //   VoiceId: "POLLY_VOICE", // For example, "Matthew"
-        // };
-
-        // const speakText = async () => {
-        //   // Update the Text parameter with the text entered by the user
-        //   try {
-        //     let url = await getSynthesizeSpeechUrl({
-        //       client,
-        //       params: speechParams,
-        //     });
-        //     console.log(url);
-        //     // // Load the URL of the voice recording into the browser
-        //     // document.getElementById("audioSource").src = url;
-        //     // document.getElementById("audioPlayback").load();
-        //     // document.getElementById("result").innerHTML = "Speech ready to play.";
-        //   } catch (err) {
-        //     console.log("Error", err);
-        //   }
-        // };
-        // speakText();
+    sendMessage().then((response) => {
+      console.log(response);
+      const synthesizeSpeechCommand = new SynthesizeSpeechCommand({
+        Engine: "generative",
+        Text: response,
+        VoiceId: "Matthew",
+        OutputFormat: "mp3",
       });
+      const run = async () => {
+        const { AudioStream } = await pollyClient.send(synthesizeSpeechCommand);
+        // Convert the stream to an ArrayBuffer
+        let audioBuffer = [];
+        AudioStream.on('data', (chunk) => {
+          audioBuffer.push(chunk);
+        });
 
-      // Emit success message back to client
-      socket.emit("upload-status", {
-        message: "Resume and job description received and processed.",
-        // resumeUrl: resumeUrl,
-      });
-    } catch (error) {
-      console.error("Error handling submission:", error);
-      socket.emit("upload-error", "Error handling resume and job description.");
-    }
+        AudioStream.on('end', () => {
+          const audioArrayBuffer = Buffer.concat(audioBuffer);
+          // Send the audio data to the frontend via WebSocket
+          socket.emit("audio-response", audioArrayBuffer);
+        });
+      }
+      run();
+    });
+
+    // Emit success message back to client
+    socket.emit("upload-status", {
+      message: "Resume and job description received and processed.",
+    });
   });
 
   socket.on("audio", (audioData) => {

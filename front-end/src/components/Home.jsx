@@ -1,38 +1,57 @@
 import React, { useState, useEffect, useRef } from "react";
+import {
+  Container,
+  TextField,
+  Button,
+  Typography,
+  Box,
+  Grid,
+  Paper,
+  IconButton,
+  Snackbar,
+} from "@mui/material";
+import { Mic, MicOff, CloudUpload } from "@mui/icons-material";
+import { styled } from "@mui/system";
 import io from "socket.io-client";
 
-const Home = () => {
-  const [transcription, setTranscription] = useState("");
+const StyledPaper = styled(Paper)(({ theme }) => ({
+  padding: theme.spacing(4),
+  margin: theme.spacing(4, 0),
+  display: "flex",
+  flexDirection: "column",
+  alignItems: "center",
+}));
+
+const StyledSubmitButton = styled(Button)(({ theme }) => ({
+  margin: theme.spacing(3, 0, 2),
+}));
+
+export default function Home() {
   const [isRecording, setIsRecording] = useState(false);
-  const [resume, setResume] = useState(null);
+  const [resume, setResume] = useState("");
   const [jobDescription, setJobDescription] = useState("");
   const [statusMessage, setStatusMessage] = useState("");
+  const [snackbarOpen, setSnackbarOpen] = useState(false);
+  const [isSetup, setIsSetup] = useState(false);
+
   const mediaRecorderRef = useRef(null);
   const socketRef = useRef(null);
   const audioChunks = useRef([]);
   const [audioUrl, setAudioUrl] = useState(null);
 
   useEffect(() => {
-    // Initialize WebSocket connection
     socketRef.current = io("http://localhost:5001");
-    socketRef.current.on("connection", () => {
-      console.log("Connected to server");
-    });
-
-    // Listen for transcription updates
-    socketRef.current.on("transcription", (data) => {
-      setTranscription((prev) => prev + " " + data);
-    });
-
-    // Listen for success or error messages for resume and job description processing
+    socketRef.current.on("connection", () =>
+      console.log("Connected to server")
+    );
     socketRef.current.on("upload-status", (data) => {
-      setStatusMessage(data.message); // Display success message
+      setStatusMessage(data.message);
+      setSnackbarOpen(true);
     });
-
     socketRef.current.on("upload-error", (error) => {
-      setStatusMessage(error); // Display error message
+      setStatusMessage(error);
+      setSnackbarOpen(true);
     });
-
     socketRef.current.on("audio-response", (audioArrayBuffer) => {
       if (audioArrayBuffer) {
         const audioBlob = new Blob([audioArrayBuffer], { type: 'audio/mp3' });
@@ -42,8 +61,9 @@ const Home = () => {
     });
 
     return () => {
-      // Clean up socket connection
-      socketRef.current.disconnect();
+      if (socketRef.current) {
+        socketRef.current.disconnect();
+      }
     };
   }, []);
 
@@ -59,108 +79,132 @@ const Home = () => {
         },
       })
       .then((stream) => {
-        console.log("Got audio stream");
         mediaRecorderRef.current = new MediaRecorder(stream, {
           mimeType: "audio/webm",
         });
-        mediaRecorderRef.current.ondataavailable = (event) => {
+        mediaRecorderRef.current.ondataavailable = (event) =>
           audioChunks.current.push(event.data);
-        };
-
         mediaRecorderRef.current.onstop = () => {
-          console.log("Recording stopped");
           const audioBlob = new Blob(audioChunks.current, {
             type: "audio/wav",
           });
           audioChunks.current = [];
-
-          // Convert the audio blob to an ArrayBuffer and send it to the backend
           audioBlob.arrayBuffer().then((audioData) => {
-            socketRef.current.emit("audio", audioData);
-            console.log("Sent audio data");
+            if (socketRef.current) {
+              socketRef.current.emit("audio", audioData);
+            }
           });
         };
-
         mediaRecorderRef.current.start();
-        socketRef.current.emit("start");
+        if (socketRef.current) {
+          socketRef.current.emit("start");
+        }
       })
-      .catch((error) => {
-        console.error("Error accessing microphone:", error);
-      });
+      .catch((error) => console.error("Error accessing microphone:", error));
   };
 
   const handleStopRecording = () => {
     setIsRecording(false);
     if (mediaRecorderRef.current) {
       mediaRecorderRef.current.stop();
-      socketRef.current.emit("stop");
+      if (socketRef.current) {
+        socketRef.current.emit("stop");
+      }
     }
-  };
-
-  const handleResumeUpload = (event) => {
-    setResume(event.target.files[0]);
-  };
-
-  const handleJobDescriptionChange = (event) => {
-    setJobDescription(event.target.value);
   };
 
   const handleSubmit = () => {
     if (resume && jobDescription) {
-      // Convert the resume file to binary format
-      const reader = new FileReader();
-      reader.readAsArrayBuffer(resume);
-      reader.onloadend = () => {
-        const resumeData = reader.result;
-
-        // Emit the data via WebSocket
-        socketRef.current.emit("submit", {
-          resume: resumeData,
-          jobDescription: jobDescription,
-        });
-      };
+      if (socketRef.current) {
+        setIsSetup(true);
+        socketRef.current.emit("submit", { resume, jobDescription });
+      }
     } else {
-      alert("Please upload a resume and enter a job description.");
+      setStatusMessage("Please enter both resume and job description.");
+      setSnackbarOpen(true);
     }
   };
 
   return (
-    <div>
-      <h2>Resume and Job Description Upload</h2>
-      <div>
-        <label>Upload Resume:</label>
-        <input
-          type="file"
-          accept=".pdf,.doc,.docx"
-          onChange={handleResumeUpload}
-        />
-      </div>
-      <div>
-        <label>Job Description:</label>
-        <textarea
-          value={jobDescription}
-          onChange={handleJobDescriptionChange}
-          rows="4"
-          cols="50"
-          placeholder="Enter the job description here..."
-        />
-      </div>
-      <button onClick={handleSubmit}>Submit</button>
-      {statusMessage && <p>{statusMessage}</p>} {/* Display status message */}
-      <h2>Audio Recording and Text Processing</h2>
-      <button onClick={handleStartRecording} disabled={isRecording}>
-        Start Recording
-      </button>
-      <button onClick={handleStopRecording} disabled={!isRecording}>
-        Stop Recording
-      </button>
-      <p>Transcription: {transcription}</p>
+    <Container component="main" maxWidth="md">
+      <StyledPaper elevation={6}>
+        <Typography component="h1" variant="h4" gutterBottom>
+          Prepify
+        </Typography>
+        <Box width="100%" mt={3}>
+          {!isSetup && (
+            <>
+              <Grid container spacing={3}>
+                <Grid item xs={12} md={6}>
+                  <TextField
+                    fullWidth
+                    multiline
+                    rows={6}
+                    variant="outlined"
+                    label="Resume"
+                    value={resume}
+                    onChange={(e) => setResume(e.target.value)}
+                  />
+                </Grid>
+                <Grid item xs={12} md={6}>
+                  <TextField
+                    fullWidth
+                    multiline
+                    rows={6}
+                    variant="outlined"
+                    label="Job Description"
+                    value={jobDescription}
+                    onChange={(e) => setJobDescription(e.target.value)}
+                  />
+                </Grid>
+              </Grid>
+              <StyledSubmitButton
+                onClick={handleSubmit}
+                fullWidth
+                variant="contained"
+                color="primary"
+                startIcon={<CloudUpload />}
+              >
+                Submit Application
+              </StyledSubmitButton>
+            </>
+          )}
+          {isSetup && (
+            <Box
+              display="flex"
+              alignItems="center"
+              justifyContent="center"
+              flexDirection="column"
+            >
+              <IconButton
+                onClick={isRecording ? handleStopRecording : handleStartRecording}
+                color="primary"
+                style={{ fontSize: '3rem' }} // Increase the size of the icon
+              >
+                {isRecording ? <MicOff style={{ fontSize: '3rem' }} /> : <Mic style={{ fontSize: '3rem' }} />}
+              </IconButton>
+              <Button
+                variant="contained"
+                color="secondary"
+                // onClick={handleEndInterview}
+                style={{ marginTop: '1rem', alignSelf: 'flex-end' }} // Align the button to the right
+              >
+                End Interview
+              </Button>
+            </Box>
+          )}
+        </Box>
+      </StyledPaper>
+      <Snackbar
+        anchorOrigin={{ vertical: "bottom", horizontal: "center" }}
+        open={snackbarOpen}
+        autoHideDuration={6000}
+        onClose={() => setSnackbarOpen(false)}
+        message={statusMessage}
+      />
       {audioUrl !== null && <audio autoPlay>
         <source src={audioUrl} type="audio/mp3" />
       </audio>}
-      <hr />
-    </div>
+    </Container>
   );
-};
-
-export default Home;
+}
