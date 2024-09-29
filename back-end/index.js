@@ -1,23 +1,16 @@
-// const express = require('express');
-// const cors = require('cors');
-// const http = require('http');
-// const { Server } = require("socket.io");
-// const AWS = require('aws-sdk');
-// const { env } = require('process');
-
 import express from 'express';
 import cors from 'cors';
 import http from 'http';
 import { Server } from 'socket.io';
 import env from 'dotenv';
-import { AudioContext } from 'web-audio-api';
-import audioBufferToWav from 'audiobuffer-to-wav';
 import fs from 'fs';
-import createBuffer from 'audio-buffer-from';
-import { TranscribeClient, StartTranscriptionJobCommand, TranscriptionJobStatus } from '@aws-sdk/client-transcribe';
-import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
+import ffmpegPath from '@ffmpeg-installer/ffmpeg';
+import ffmpeg from 'fluent-ffmpeg';
+import { TranscribeClient, StartTranscriptionJobCommand, GetTranscriptionJobCommand } from '@aws-sdk/client-transcribe';
+import { S3Client, PutObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
 
 env.config();
+ffmpeg.setFfmpegPath(ffmpegPath.path);
 
 const app = express();
 const corsOptions = {
@@ -35,47 +28,92 @@ const io = new Server(server, {
 });
 
 async function transcriptionPipeline(audioData) {
-    AUDIO_FILE_NAME = 'audio.wav';
-    //Save Audio to a file.
-    const audioBuffer = createBuffer(audioData, {
-      sampleRate: 44100,
-      channels: 1,
-    });
-    const wav = audioBufferToWav(audioBuffer);
-    fs.writeFileSync(AUDIO_FILE_NAME, Buffer.from(wav));
-    //TODO: Fix this shit.
+    // Convert audio data to wav
+    const AUDIO_FILE_NAME = 'audio.wav';
+    const AUDIO_MIDDLE_NAME = 'audio.webm';
+    fs.writeFileSync(AUDIO_MIDDLE_NAME, Buffer.from(audioData));
+    const stats = fs.statSync(AUDIO_MIDDLE_NAME);
+    if (stats.size === 0) {
+      console.err("Empty audio file");
+      return;
+    }
+    try {
+      ffmpeg(AUDIO_MIDDLE_NAME)
+        .inputOptions("-acodec libopus")
+        .audioChannels(1)
+        .audioFrequency(44100)
+        .toFormat("wav")
+        .on("end", () => {
+          console.log("File converted to wav");
+        })
+        .on("error", (err) => {
+          console.log("Error converting file to wav", err);
+        })
+        .save(AUDIO_FILE_NAME);
+    } catch (err) {
+      console.log(err);
+    }
 
-    // //Upload Audio to S3.
-    // const fileData = fs.readFileSync('audio.wav');
-    // const command = new PutObjectCommand({
-    //   Bucket: "sunhacks",
-    //   Key: "audio.wav",
-    //   Body: fileData
-    // });
-    // s3Client.send(command);
+    // Upload Audio to S3.
+    const fileData = fs.readFileSync(AUDIO_FILE_NAME);
+    const putCommand = new PutObjectCommand({
+      Bucket: "sunhacks",
+      Key: AUDIO_FILE_NAME,
+      Body: fileData
+    });
+    try {
+      await s3Client.send(putCommand);
+      console.log("Successfully uploaded data to S3");
+    } catch (err) {
+      console.log(err);
+    }
 
     // Send audio to AWS Transcribe
+    const jobName = 'SunHacksTranscriptionJob' + new Date().getTime();
     const params = {
-      TranscriptionJobName: 'SunHacksTranscriptionJob_' + new Date().getTime(),
+      TranscriptionJobName: jobName,
       LanguageCode: 'en-US',
       MediaFormat: 'wav',
       Media: {
-        MediaFileUri: 'https://sunhacks.s3.amazonaws.com/harvard.wav',
+        MediaFileUri: 'https://sunhacks.s3.amazonaws.com/' + AUDIO_FILE_NAME,
       },
       OutputBucketName: "sunhacks",
     };
-    const run = async () => {
+    try {
+      await transcribeClient.send(new StartTranscriptionJobCommand(params));
+      console.log("Successfully sent transcription job to AWS Transcribe");
+    } catch (err) {
+      console.log("Error", err);
+    }
+
+    // Poll AWS Transcribe for job completion
+    const getJobCommand = new GetTranscriptionJobCommand({
+      TranscriptionJobName: jobName
+    });
+    while (true) {
       try {
-        const data = await transcribeClient.send(
-          new StartTranscriptionJobCommand(params)
-        );
-        console.log("Success - put", data);
-        return data; // For unit tests.
+        const data = await transcribeClient.send(getJobCommand);
+        if (data["TranscriptionJob"]["TranscriptionJobStatus"] === "COMPLETED") {
+          console.log("Transcription job completed");
+          break;
+        }
       } catch (err) {
-        console.log("Error", err);
+        console.error(err);
       }
-    };
-    run();
+    }
+
+    // Get transcription from AWS S3.
+    const getCommand = new GetObjectCommand({
+      Bucket: "sunhacks",
+      Key: jobName + ".json"
+    });
+    try {
+      const response = await s3Client.send(getCommand);
+      const data = JSON.parse(await response.Body.transformToString());
+      console.log(data["results"]["transcripts"][0]["transcript"]);
+    } catch (err) {
+      console.error(err);
+    }
 }
 
 // Set up AWS Transcribe
@@ -103,7 +141,8 @@ io.on('connection', (socket) => {
   });
 
   socket.on('audio', (audioData) => {
-
+    console.log('Received audio data');
+    transcriptionPipeline(audioData);
   });
 
   socket.on('stop', () => {

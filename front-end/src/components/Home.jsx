@@ -28,29 +28,30 @@ const Home = () => {
 
   const handleStartRecording = () => {
     setIsRecording(true);
-    navigator.mediaDevices.getUserMedia({ audio: true })
-      .then((stream) => {
-        mediaRecorderRef.current = new MediaRecorder(stream);
+    navigator.mediaDevices.getUserMedia({
+        audio: {
+          sampleRate: 44100,
+          channelCount: 1,
+          echoCancellation: true,
+          noiseSuppression: true,
+        }
+    }).then((stream) => {
+        console.log("Got audio stream");
+        mediaRecorderRef.current = new MediaRecorder(stream, { mimeType: 'audio/webm' });
         mediaRecorderRef.current.ondataavailable = (event) => {
           audioChunks.current.push(event.data);
         };
         
         mediaRecorderRef.current.onstop = () => {
+          console.log('Recording stopped');
           const audioBlob = new Blob(audioChunks.current, { type: 'audio/wav' });
-          const audioUrl = URL.createObjectURL(audioBlob);
-          const anchor = document.createElement('a');
-          anchor.href = audioUrl;
-          anchor.download = 'audio.wav';
-          anchor.click();
           audioChunks.current = [];
 
           // Convert the audio blob to an ArrayBuffer and send it to the backend
-          const reader = new FileReader();  
-          reader.readAsArrayBuffer(audioBlob);
-          reader.onloadend = () => {
-            const audioData = reader.result;
+          audioBlob.arrayBuffer().then((audioData) => {
             socketRef.current.emit('audio', audioData);
-          };
+            console.log('Sent audio data');
+          });
         };
 
         mediaRecorderRef.current.start();
