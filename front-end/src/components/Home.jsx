@@ -9,6 +9,8 @@ import {
   Paper,
   IconButton,
   Snackbar,
+  Select,
+  MenuItem,
 } from "@mui/material";
 import { Mic, MicOff, CloudUpload } from "@mui/icons-material";
 import { styled } from "@mui/system";
@@ -38,6 +40,7 @@ export default function Home() {
   const [isSetup, setIsSetup] = useState(false);
   const [isEndOfInterview, setIsEndOfInterview] = useState(false);
   const [report, setReport] = useState("");
+  const [selectedInterviewer, setSelectedInterviewer] = useState("Matthew");
 
   const mediaRecorderRef = useRef(null);
   const socketRef = useRef(null);
@@ -135,12 +138,16 @@ export default function Home() {
     if (resume && jobDescription) {
       if (socketRef.current) {
         setIsSetup(true);
-        socketRef.current.emit("submit", { resume, jobDescription });
+        socketRef.current.emit("submit", { resume, jobDescription, selectedInterviewer });
       }
     } else {
       setStatusMessage("Please enter both resume and job description.");
       setSnackbarOpen(true);
     }
+  };
+
+  const handleInterviewerChange = (event) => {
+    setSelectedInterviewer(event.target.value);
   };
 
   return (
@@ -181,6 +188,18 @@ export default function Home() {
                         onChange={(e) => setJobDescription(e.target.value)}
                       />
                     </Grid>
+                    <Grid item xs={12}>
+                      <Select
+                        value={selectedInterviewer}
+                        onChange={handleInterviewerChange}
+                        displayEmpty
+                        fullWidth
+                        variant="outlined"
+                      >
+                        <MenuItem value="Matthew">Matthew</MenuItem>
+                        <MenuItem value="Ruth">Ruth</MenuItem>
+                      </Select>
+                    </Grid>
                   </Grid>
                   <StyledSubmitButton
                     onClick={handleSubmit}
@@ -209,7 +228,7 @@ export default function Home() {
                     </IconButton>
                     <Button
                       variant="contained"
-                      color="secondary"
+                      // color="secondary"
                       onClick={handleEndInterview}
                       style={{ marginTop: '3rem' }} // Align the button to the right
                     >

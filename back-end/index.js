@@ -233,7 +233,7 @@ io.on("connection", (socket) => {
   });
 
   //resume and job description upload
-  socket.on("submit", async ({ resume, jobDescription }) => {
+  socket.on("submit", async ({ resume, jobDescription, selectedInterviewer }) => {
     console.log("resume and job description received");
     chat_history.push(
       {
@@ -254,7 +254,7 @@ io.on("connection", (socket) => {
       const synthesizeSpeechCommand = new SynthesizeSpeechCommand({
         Engine: "generative",
         Text: response,
-        VoiceId: "Matthew",
+        VoiceId: selectedInterviewer,
         OutputFormat: "mp3",
       });
       const run = async () => {
