@@ -195,6 +195,17 @@ const pollyClient = new PollyClient({
   },
 });
 
+async function handleEndInterview(socket) {
+  const response = await sendMessage("\
+    Now that the interview is over, I want you to generate a report of the interview.\
+    Mention how the candidate did in the interview, their strengths, weaknesses, overall score out of 100.\
+    Also tell what areas the candidate needs to focus on. The report needs to be generated solely based on \
+    the candidate's interview performance. If the interview ends early without much information from \
+    the candidate, score them appropriately, don't generalize");
+  socket.emit("end-response", response);
+  console.log("response", response)
+}
+
 async function sendMessage(message = "") {
   try {
     chat_history = chat_history.concat({ role: "user", content: message })
@@ -215,6 +226,10 @@ io.on("connection", (socket) => {
 
   socket.on("start", () => {
     console.log("Start recording");
+  });
+
+  socket.on("end-interview", () => {
+    handleEndInterview(socket);
   });
 
   //resume and job description upload
