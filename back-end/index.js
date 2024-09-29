@@ -16,6 +16,7 @@ import {
   PutObjectCommand,
   GetObjectCommand,
 } from "@aws-sdk/client-s3";
+import { PollyClient, SynthesizeSpeechCommand } from "@aws-sdk/client-polly";
 import { v4 as uuidv4 } from "uuid";
 import OpenAIApi from "openai";
 
@@ -37,7 +38,13 @@ const io = new Server(server, {
   },
 });
 
-async function transcriptionPipeline(audioData) {
+let chat_history = []
+
+const openai = new OpenAIApi({
+  apiKey: process.env.OPENAI_API_KEY,
+});
+
+async function transcriptionPipeline(audioData, socket) {
   const uniqueId = uuidv4(); // Generate unique ID for each file/job
   const AUDIO_FILE_NAME = `audio-${uniqueId}.wav`; // Unique WAV file name
   const AUDIO_MIDDLE_NAME = `audio-${uniqueId}.webm`; // Unique WebM file name
@@ -86,6 +93,9 @@ async function transcriptionPipeline(audioData) {
     console.log("Error uploading to S3:", err);
   }
 
+  fs.unlinkSync(AUDIO_FILE_NAME);
+  fs.unlinkSync(AUDIO_MIDDLE_NAME);
+
   // Send audio to AWS Transcribe using a unique job name
   const jobName = `SunHacksTranscriptionJob-${uniqueId}`;  // Unique job name
   const params = {
@@ -129,43 +139,69 @@ async function transcriptionPipeline(audioData) {
   });
   try {
     const response = await s3Client.send(getCommand);
-    data = JSON.parse(await response.Body.transformToString());
-    console.log(data["results"]["transcripts"][0]["transcript"]);
+    data = JSON.parse(await response.Body.transformToString())["results"]["transcripts"][0]["transcript"];
+    console.log(data);
   } catch (err) {
     console.error(err);
   }
-  const openai = new OpenAIApi({
-    apiKey: process.env.OPENAI_API_KEY,
-  });
 
-  let messages = [
-    { role: "system", content: "Your name is Matthew. You are now an interviewer with more than 10 years of experience. \
-      You are taking an interview for the given job description. You have the resume of the candidate. You will be making \
-      it a formal interview. You need to introduce yourself, ask for an introduction, and the proceed to asking two questions \
-      based on the candidates experience and skills, two technical questions (no coding) based on the job description and two \
-      behavioural questions for checking soft skills of the candidate. Here is the job description and the resume of the candidate. \
-      You are taking an interactive interview, so wait for the candidate's response. Once the candidate responds, make some comment \
-      about the response and proceed to the next question. Do not put any headings, titles, or expectations in round brackets. Do not \
-      say you're waiting for my response. It just needs to be a simple conversation." },
-  ]
-
-  async function sendMessage(message) {
-    try {
-      messages = messages.concat({ role: "user", content: message })
-      const response = await openai.chat.completions.create({
-        model: "gpt-4o",
-        messages,
-      });
-      messages = messages.concat({ role: "system", content: response.choices[0].message.content })
-      return response.choices[0].message.content;
-    } catch (err) {
-      console.error('Error with OpenAI:', err);
-      return 'An error occurred while processing your request.';
-    }
-  }
-
-  sendMessage(data["results"]["transcripts"][0]["transcript"]).then((response) => {
+  sendMessage(data).then((response) => {
     console.log(response);
+
+    const synthesizeSpeechCommand = new SynthesizeSpeechCommand({
+      Engine: "generative",
+      Text: response,
+      VoiceId: "Matthew",
+      OutputFormat: "mp3",
+    });
+    const run = async () => {
+      const { AudioStream } = await pollyClient.send(synthesizeSpeechCommand);
+      // Convert the stream to an ArrayBuffer
+      let audioBuffer = [];
+      AudioStream.on('data', (chunk) => {
+        audioBuffer.push(chunk);
+      });
+
+      AudioStream.on('end', () => {
+        const audioArrayBuffer = Buffer.concat(audioBuffer);
+        // Send the audio data to the frontend via WebSocket
+        socket.emit("audio-response", audioArrayBuffer);
+      });
+      // AudioStream.pipe(fs.createWriteStream("audio_polly.mp3"));
+      // const arrayBuffer = new Uint8Array(AudioStream).buffer;
+      // const POLLY_WEBM = `audio_polly.webm`;
+      // const POLLY_WAV = `audio_polly.wav`;
+      // // Write audio data to WebM file
+      // fs.writeFileSync(POLLY_WEBM, Buffer.from(arrayBuffer));
+      // const stats = fs.statSync(POLLY_WEBM);
+      // if (stats.size === 0) {
+      //   console.error("Empty audio file");
+      //   return;
+      // }
+
+      // // Convert WebM to WAV using ffmpeg and wait for conversion to finish
+      // try {
+      //   await new Promise((resolve, reject) => {
+      //     ffmpeg(POLLY_WEBM)
+      //       .inputOptions("-acodec libopus")
+      //       .audioChannels(1)
+      //       .audioFrequency(44100)
+      //       .toFormat("wav")
+      //       .on("end", () => {
+      //         console.log("File converted to wav");
+      //         resolve();
+      //       })
+      //       .on("error", (err) => {
+      //         console.log("Error converting file to wav", err);
+      //         reject(err);
+      //       })
+      //       .save(POLLY_WAV);
+      //   });
+      // } catch (err) {
+      //   console.log(err);
+      // }
+    }
+    run();
     // const client = new Polly({
     //   region: "REGION",
     // });
@@ -195,9 +231,7 @@ async function transcriptionPipeline(audioData) {
     //   }
     // };
     // speakText();
-
   });
-
 }
 
 // Set up AWS Transcribe
@@ -215,6 +249,28 @@ const s3Client = new S3Client({
     secretAccessKey: process.env.SECRET_KEY,
   },
 });
+const pollyClient = new PollyClient({
+  region: "us-east-1",
+  credentials: {
+    accessKeyId: process.env.ACCESS_KEY,
+    secretAccessKey: process.env.SECRET_KEY,
+  },
+});
+
+async function sendMessage(message = "") {
+  try {
+    chat_history = chat_history.concat({ role: "user", content: message })
+    const response = await openai.chat.completions.create({
+      model: "gpt-4o",
+      messages: chat_history,
+    });
+    chat_history = chat_history.concat({ role: "assistant", content: response.choices[0].message.content })
+    return response.choices[0].message.content;
+  } catch (err) {
+    console.error('Error with OpenAI:', err);
+    return 'An error occurred while processing your request.';
+  }
+}
 
 io.on("connection", (socket) => {
   console.log("Client connected");
@@ -234,9 +290,56 @@ io.on("connection", (socket) => {
       //     resumeBuffer,
       //     `resumes/${Date.now()}.pdf`
       //   );
-
+      resume = "This is my resume, I know stuff"
       // Process job description (e.g., log it for now)
       console.log("Job Description:", jobDescription);
+
+      chat_history.push(
+        {
+          role: "system", content: `Your name is Matthew. You are now an interviewer with more than 10 years of experience. \
+          You are taking an interview for the given job description. You have the resume of the candidate. You will be making \
+          it a formal interview. You need to introduce yourself, ask for an introduction, and the proceed to asking two questions \
+          based on the candidates experience and skills, two technical questions (no coding) based on the job description and two \
+          behavioural questions for checking soft skills of the candidate. Here is the job description and the resume of the candidate. \
+          You are taking an interactive interview, so wait for the candidate's response. Once the candidate responds, make some comment \
+          about the response and proceed to the next question. Do not put any headings, titles, or expectations in round brackets. Do not \
+          say you're waiting for my response. It just needs to be a simple conversation.\nJob Description: \n${jobDescription}\nResume: \n\
+          ${resume}`
+        },
+      )
+
+      sendMessage().then((response) => {
+        console.log(response);
+        // const client = new Polly({
+        //   region: "REGION",
+        // });
+
+        // const speechParams = {
+        //   OutputFormat: "OUTPUT_FORMAT", // For example, 'mp3'
+        //   SampleRate: "SAMPLE_RATE", // For example, '16000
+        //   Text: response, // The 'speakText' function supplies this value
+        //   TextType: "TEXT_TYPE", // For example, "text"
+        //   VoiceId: "POLLY_VOICE", // For example, "Matthew"
+        // };
+
+        // const speakText = async () => {
+        //   // Update the Text parameter with the text entered by the user
+        //   try {
+        //     let url = await getSynthesizeSpeechUrl({
+        //       client,
+        //       params: speechParams,
+        //     });
+        //     console.log(url);
+        //     // // Load the URL of the voice recording into the browser
+        //     // document.getElementById("audioSource").src = url;
+        //     // document.getElementById("audioPlayback").load();
+        //     // document.getElementById("result").innerHTML = "Speech ready to play.";
+        //   } catch (err) {
+        //     console.log("Error", err);
+        //   }
+        // };
+        // speakText();
+      });
 
       // Emit success message back to client
       socket.emit("upload-status", {
@@ -251,7 +354,7 @@ io.on("connection", (socket) => {
 
   socket.on("audio", (audioData) => {
     console.log("Received audio data");
-    transcriptionPipeline(audioData);
+    transcriptionPipeline(audioData, socket);
   });
 
   socket.on("stop", () => {

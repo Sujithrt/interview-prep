@@ -10,6 +10,7 @@ const Home = () => {
   const mediaRecorderRef = useRef(null);
   const socketRef = useRef(null);
   const audioChunks = useRef([]);
+  const [audioUrl, setAudioUrl] = useState(null);
 
   useEffect(() => {
     // Initialize WebSocket connection
@@ -30,6 +31,14 @@ const Home = () => {
 
     socketRef.current.on("upload-error", (error) => {
       setStatusMessage(error); // Display error message
+    });
+
+    socketRef.current.on("audio-response", (audioArrayBuffer) => {
+      if (audioArrayBuffer) {
+        const audioBlob = new Blob([audioArrayBuffer], { type: 'audio/mp3' });
+        const url = URL.createObjectURL(audioBlob);
+        setAudioUrl(url);
+      }
     });
 
     return () => {
@@ -146,6 +155,9 @@ const Home = () => {
         Stop Recording
       </button>
       <p>Transcription: {transcription}</p>
+      {audioUrl !== null && <audio autoPlay>
+        <source src={audioUrl} type="audio/mp3" />
+      </audio>}
       <hr />
     </div>
   );
