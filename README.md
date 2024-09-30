@@ -61,10 +61,11 @@ The AI Mock Interview Prepper is a tool designed to simulate real-life job inter
 
     ```bash
     # Backend dependencies
+    cd back-end
     npm install
 
     # Frontend dependencies
-    cd client
+    cd front-end
     npm install
     ```
 
@@ -72,8 +73,8 @@ The AI Mock Interview Prepper is a tool designed to simulate real-life job inter
 
     ```
     OPENAI_API_KEY=your_openai_api_key
-    AWS_ACCESS_KEY_ID=your_aws_access_key
-    AWS_SECRET_ACCESS_KEY=your_aws_secret_access_key
+    ACCESS_KEY=your_aws_access_key
+    SECRET_KEY=your_aws_secret_access_key
     BUCKET_NAME=your_s3_bucket_name
     REGION=us-east-1
     ```
