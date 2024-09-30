@@ -79,10 +79,16 @@ The AI Mock Interview Prepper is a tool designed to simulate real-life job inter
     REGION=us-east-1
     ```
 
-4. Start the server:
+4. Start the back-end server:
 
     ```bash
-    npm run dev
+    node index.js
+    ```
+
+5. Start the front-end server:
+
+    ```bash
+    npm run start
     ```
 
     The application will be available at `http://localhost:5001`.
