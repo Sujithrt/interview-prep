@@ -111,7 +111,7 @@ export default function Home() {
           audioChunks.current = [];
           audioBlob.arrayBuffer().then((audioData) => {
             if (socketRef.current) {
-              socketRef.current.emit("audio", audioData);
+              socketRef.current.emit("audio", {audioData, selectedInterviewer}); 
             }
           });
         };
@@ -244,7 +244,7 @@ export default function Home() {
                   variant="contained"
                   color="primary"
                   onClick={() => window.location.reload()}
-                  style={{ marginTop: '3rem' }} // Add some margin to the top
+                  style={{ marginTop: '1rem' }} // Add some margin to the top
                 >
                   Back to Home
                 </Button>

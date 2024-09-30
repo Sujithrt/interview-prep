@@ -44,7 +44,7 @@ const openai = new OpenAIApi({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
-async function transcriptionPipeline(audioData, socket) {
+async function transcriptionPipeline(audioData, selectedInterviewer, socket) {
   const uniqueId = uuidv4(); // Generate unique ID for each file/job
   const AUDIO_FILE_NAME = `audio-${uniqueId}.wav`; // Unique WAV file name
   const AUDIO_MIDDLE_NAME = `audio-${uniqueId}.webm`; // Unique WebM file name
@@ -151,7 +151,7 @@ async function transcriptionPipeline(audioData, socket) {
     const synthesizeSpeechCommand = new SynthesizeSpeechCommand({
       Engine: "generative",
       Text: response,
-      VoiceId: "Matthew",
+      VoiceId: selectedInterviewer,
       OutputFormat: "mp3",
     });
     const run = async () => {
@@ -281,9 +281,9 @@ io.on("connection", (socket) => {
     });
   });
 
-  socket.on("audio", (audioData) => {
+  socket.on("audio", ({ audioData, selectedInterviewer }) => {
     console.log("Received audio data");
-    transcriptionPipeline(audioData, socket);
+    transcriptionPipeline(audioData, selectedInterviewer, socket);
   });
 
   socket.on("stop", () => {
