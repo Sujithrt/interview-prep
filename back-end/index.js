@@ -24,12 +24,6 @@ env.config();
 ffmpeg.setFfmpegPath(ffmpegPath.path);
 
 const app = express();
-const corsOptions = {
-  origin: "*",
-  credentials: true,
-  optionsSuccessStatus: 200,
-};
-app.use(cors(corsOptions));
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
