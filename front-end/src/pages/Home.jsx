@@ -37,7 +37,6 @@ export default function Home() {
   const mediaRecorderRef = useRef(null);
   const socketRef = useRef(null);
   const audioChunks = useRef([]);
-  const [audioUrl, setAudioUrl] = useState(null);
   const [loading, setLoading] = useState(false);
 
   const handleEndInterview = () => {
@@ -62,7 +61,6 @@ export default function Home() {
       if (audioArrayBuffer) {
         const audioBlob = new Blob([audioArrayBuffer], { type: 'audio/mp3' });
         const url = URL.createObjectURL(audioBlob);
-        setAudioUrl(url);
         setLoading(false);
         setInterviewerSpeaking(true);
         const audio = new Audio(url);
@@ -84,7 +82,7 @@ export default function Home() {
         socketRef.current.disconnect();
       }
     };
-  }, [audioUrl]);
+  }, []);
 
   const handleStartRecording = () => {
     setIsRecording(true);
