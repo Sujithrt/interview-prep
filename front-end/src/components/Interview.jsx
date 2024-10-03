@@ -2,7 +2,7 @@ import React from 'react'
 import { Box, Button, IconButton } from '@mui/material'
 import { Mic, MicOff } from "@mui/icons-material";
 
-export default function Interview({ isRecording, handleStartRecording, handleStopRecording, handleEndInterview }) {
+export default function Interview({ isRecording, handleStartRecording, handleStopRecording, handleEndInterview, interviewerSpeaking }) {
     return (
         <Box
             display="flex"
@@ -14,13 +14,15 @@ export default function Interview({ isRecording, handleStartRecording, handleSto
                 onClick={isRecording ? handleStopRecording : handleStartRecording}
                 color="primary"
                 style={{ fontSize: '3rem' }}
+                disabled={interviewerSpeaking}
             >
                 {isRecording ? <MicOff style={{ fontSize: '3rem' }} /> : <Mic style={{ fontSize: '3rem' }} />}
             </IconButton>
             <Button
-                variant="contained"
+                variant="outlined"
                 onClick={handleEndInterview}
                 style={{ marginTop: '3rem' }}
+                disabled={interviewerSpeaking}
             >
                 End Interview
             </Button>

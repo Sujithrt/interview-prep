@@ -31,6 +31,8 @@ export default function Home() {
   const [isEndOfInterview, setIsEndOfInterview] = useState(false);
   const [report, setReport] = useState("");
   const [selectedInterviewer, setSelectedInterviewer] = useState("Matthew");
+  const [interviewerSpeaking, setInterviewerSpeaking] = useState(true);
+  const [loadingReport, setLoadingReport] = useState(false);
 
   const mediaRecorderRef = useRef(null);
   const socketRef = useRef(null);
@@ -40,6 +42,7 @@ export default function Home() {
 
   const handleEndInterview = () => {
     socketRef.current.emit("end-interview");
+    setLoadingReport(true);
   }
 
   useEffect(() => {
@@ -61,12 +64,19 @@ export default function Home() {
         const url = URL.createObjectURL(audioBlob);
         setAudioUrl(url);
         setLoading(false);
+        setInterviewerSpeaking(true);
+        const audio = new Audio(url);
+        audio.onended = () => {
+          setInterviewerSpeaking(false);
+        };
+        audio.play();
       }
     });
 
     socketRef.current.on("end-response", (report) => {
       setIsEndOfInterview(true);
       setReport(report);
+      setLoadingReport(false);
     });
 
     return () => {
@@ -142,7 +152,7 @@ export default function Home() {
           Prepify
         </Typography>
         <Box width="100%" mt={3}>
-          {loading ? (
+          {loading || loadingReport ? (
             <Box display="flex" justifyContent="center" alignItems="center" height="100%">
               <CircularProgress />
             </Box>
@@ -161,6 +171,7 @@ export default function Home() {
                 handleStartRecording={handleStartRecording}
                 handleStopRecording={handleStopRecording}
                 handleEndInterview={handleEndInterview}
+                interviewerSpeaking={interviewerSpeaking}
               />
             )
           )}
@@ -174,11 +185,6 @@ export default function Home() {
         onClose={() => setSnackbarOpen(false)}
         message={statusMessage}
       />
-      {audioUrl !== null && (
-        <audio key={audioUrl} autoPlay>
-          <source src={audioUrl} type="audio/mp3" />
-        </audio>
-      )}
     </Container>
   );
 }
