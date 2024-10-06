@@ -1,5 +1,4 @@
 import express from "express";
-import cors from "cors";
 import http from "http";
 import { Server } from "socket.io";
 import env from "dotenv";
@@ -234,7 +233,7 @@ io.on("connection", (socket) => {
       {
         role: "system", content: `Your name is ${selectedInterviewer}. You are now an interviewer with more than 10 years of experience. \
           You are taking an interview for the given job description. You have the resume of the candidate. You will be making \
-          it a formal interview. You need to introduce yourself, ask for an introduction, and the proceed to asking two questions \
+          it a formal interview. You need to introduce yourself, ask for an introduction, and then proceed to asking two questions \
           based on the candidates experience and skills, two technical questions (no coding) based on the job description and two \
           behavioural questions for checking soft skills of the candidate. Here is the job description and the resume of the candidate. \
           You are taking an interactive interview, so wait for the candidate's response. Once the candidate responds, make some comment \

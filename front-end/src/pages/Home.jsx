@@ -12,6 +12,7 @@ import { CircularProgress } from "@mui/material";
 import InputForm from "../components/InputForm";
 import Interview from "../components/Interview";
 import InterviewReport from "../components/InterviewReport";
+import { INTERVIEWERS } from "../constants";
 
 const StyledPaper = styled(Paper)(({ theme }) => ({
   padding: theme.spacing(4),
@@ -30,7 +31,7 @@ export default function Home() {
   const [isSetup, setIsSetup] = useState(false);
   const [isEndOfInterview, setIsEndOfInterview] = useState(false);
   const [report, setReport] = useState("");
-  const [selectedInterviewer, setSelectedInterviewer] = useState("Matthew");
+  const [selectedInterviewer, setSelectedInterviewer] = useState(INTERVIEWERS.MATTHEW);
   const [interviewerSpeaking, setInterviewerSpeaking] = useState(true);
   const [loadingReport, setLoadingReport] = useState(false);
 

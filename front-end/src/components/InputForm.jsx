@@ -2,6 +2,7 @@ import React from 'react'
 import { Grid, TextField, Select, MenuItem, Button } from '@mui/material'
 import { styled } from "@mui/system";
 import { CloudUpload } from "@mui/icons-material";
+import { INTERVIEWERS } from '../constants';
 
 const StyledSubmitButton = styled(Button)(({ theme }) => ({
   margin: theme.spacing(3, 0, 2),
@@ -41,8 +42,8 @@ export default function InputForm({ resume, setResume, jobDescription, setJobDes
             fullWidth
             variant="outlined"
           >
-            <MenuItem value="Matthew">Matthew</MenuItem>
-            <MenuItem value="Ruth">Ruth</MenuItem>
+            <MenuItem value={INTERVIEWERS.MATTHEW}>{INTERVIEWERS.MATTHEW}</MenuItem>
+            <MenuItem value={INTERVIEWERS.RUTH}>{INTERVIEWERS.RUTH}</MenuItem>
           </Select>
         </Grid>
       </Grid>
